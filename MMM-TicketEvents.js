@@ -11,10 +11,12 @@ Module.register("MMM-TicketEvents", {
     classificationName: "",
     keyword: "",
     maxEvents: 25,
+    displayCount: 10,
+    scrollCount: 5,
     showImage: true,
     maxWidth: "300px",
-    rotateInterval: 60 * 1000,
-    animationSpeed: 2000,
+    rotateInterval: 15 * 1000,
+    animationSpeed: 1000,
     showHeader: true,
     header: "Upcoming Events",
     updateInterval: 60 * 60 * 1000,
@@ -28,7 +30,6 @@ Module.register("MMM-TicketEvents", {
     this.loaded = false;
     this.hasError = false;
     this.errorMessage = "";
-    this.rotateTimer = null;
     this.sendSocketNotification("FETCH_EVENTS", this.config);
     this.scheduleUpdate();
   },
@@ -77,51 +78,107 @@ Module.register("MMM-TicketEvents", {
       return wrapper;
     }
 
-    const event = this.events[this.activeIndex];
-    if (!event) return wrapper;
+    if (this.events.length <= this.config.displayCount) {
+      return this.buildStaticList(wrapper);
+    }
 
+    return this.buildTickerList(wrapper);
+  },
+
+  buildStaticList(wrapper) {
+    const list = document.createElement("div");
+    list.className = "ticket-event-list";
+    for (let i = 0; i < this.events.length; i++) {
+      list.appendChild(this.createEventCard(this.events[i]));
+    }
+    wrapper.appendChild(list);
+    return wrapper;
+  },
+
+  buildTickerList(wrapper) {
+    const outer = document.createElement("div");
+    outer.className = "ticket-events-ticker-outer";
+
+    const inner = document.createElement("div");
+    inner.className = "ticket-events-ticker-inner";
+
+    for (let i = 0; i < this.events.length; i++) {
+      inner.appendChild(this.createEventCard(this.events[i]));
+    }
+    for (let i = 0; i < this.events.length; i++) {
+      inner.appendChild(this.createEventCard(this.events[i]));
+    }
+
+    outer.appendChild(inner);
+    wrapper.appendChild(outer);
+
+    const rowHeight = 56;
+    outer.style.height = (rowHeight * this.config.displayCount) + "px";
+
+    const totalSteps = Math.ceil(this.events.length / this.config.scrollCount);
+    const duration = totalSteps * this.config.rotateInterval;
+
+    this._animName = "ticket-scroll-" + this.identifier;
+    const style = document.createElement("style");
+    style.textContent = "@keyframes " + this._animName + " { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }";
+    wrapper.appendChild(style);
+
+    inner.style.animation = this._animName + " " + duration + "ms linear infinite";
+    inner.style.willChange = "transform";
+
+    return wrapper;
+  },
+
+  createEventCard(event) {
     const card = document.createElement("div");
     card.className = "ticket-event-card";
 
     if (this.config.showImage) {
-      const imageDiv = document.createElement("div");
-      imageDiv.className = "ticket-event-image";
+      const thumb = document.createElement("div");
+      thumb.className = "ticket-event-thumb";
       if (event.image) {
         const img = document.createElement("img");
         img.src = event.image;
         img.alt = event.name;
         img.loading = "lazy";
-        imageDiv.appendChild(img);
+        thumb.appendChild(img);
       } else {
         const placeholder = document.createElement("div");
-        placeholder.className = "ticket-event-image-placeholder";
-        const seg = event.segment || "Event";
+        placeholder.className = "ticket-event-thumb-placeholder";
         placeholder.style.background = this.getPlaceholderColor(event.segment);
         placeholder.innerHTML = this.getInitials(event.name);
-        imageDiv.appendChild(placeholder);
+        thumb.appendChild(placeholder);
       }
-      card.appendChild(imageDiv);
+      card.appendChild(thumb);
     }
 
+    const info = document.createElement("div");
+    info.className = "ticket-event-info";
+
     const name = document.createElement("div");
-    name.className = "ticket-event-name bright";
+    name.className = "ticket-event-name";
     name.innerHTML = event.name;
-    card.appendChild(name);
+    info.appendChild(name);
+
+    const details = document.createElement("div");
+    details.className = "ticket-event-details";
 
     if (event.localDate) {
-      const date = document.createElement("div");
+      const date = document.createElement("span");
       date.className = "ticket-event-date";
-      date.innerHTML = this.formatDate(event.localDate, event.localTime);
-      card.appendChild(date);
+      date.innerHTML = this.formatDate(event.localDate);
+      details.appendChild(date);
     }
 
     if (event.venueName) {
-      const venue = document.createElement("div");
+      const venue = document.createElement("span");
       venue.className = "ticket-event-venue";
       const location = [event.venueCity, event.venueState].filter(Boolean).join(", ");
-      venue.innerHTML = event.venueName + (location ? ` &middot; ${location}` : "");
-      card.appendChild(venue);
+      venue.innerHTML = " &middot; " + event.venueName + (location ? " (" + location + ")" : "");
+      details.appendChild(venue);
     }
+
+    info.appendChild(details);
 
     const meta = document.createElement("div");
     meta.className = "ticket-event-meta";
@@ -139,50 +196,39 @@ Module.register("MMM-TicketEvents", {
       const currency = event.currency || "USD";
       const symbol = this.getCurrencySymbol(currency);
       if (event.priceMax != null) {
-        price.innerHTML = `${symbol}${event.priceMin} - ${symbol}${event.priceMax}`;
+        price.innerHTML = symbol + event.priceMin + " - " + symbol + event.priceMax;
       } else {
-        price.innerHTML = `From ${symbol}${event.priceMin}`;
+        price.innerHTML = "From " + symbol + event.priceMin;
       }
       meta.appendChild(price);
     }
 
-    card.appendChild(meta);
-
     if (event.url) {
-      const link = document.createElement("div");
+      const link = document.createElement("a");
       link.className = "ticket-event-link";
-      link.innerHTML = "Get tickets";
-      link.onclick = () => { window.open(event.url, "_blank"); };
-      card.appendChild(link);
+      link.href = event.url;
+      link.target = "_blank";
+      link.innerHTML = "Tickets";
+      meta.appendChild(link);
     }
 
-    wrapper.appendChild(card);
-    return wrapper;
+    info.appendChild(meta);
+    card.appendChild(info);
+    return card;
   },
 
-  formatDate(dateStr, timeStr) {
+  formatDate(dateStr) {
     if (!dateStr) return "";
     const parts = dateStr.split("-");
     if (parts.length !== 3) return dateStr;
     const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
-    let formatted = date.toLocaleDateString(this.config.locale || "en-US", options);
-    if (timeStr) {
-      const timeParts = timeStr.split(":");
-      if (timeParts.length >= 2) {
-        const hours = parseInt(timeParts[0]);
-        const minutes = timeParts[1];
-        const ampm = hours >= 12 ? "PM" : "AM";
-        const h = hours % 12 || 12;
-        formatted += ` &middot; ${h}:${minutes} ${ampm}`;
-      }
-    }
-    return formatted;
+    const options = { weekday: "short", month: "short", day: "numeric" };
+    return date.toLocaleDateString(this.config.locale || "en-US", options);
   },
 
   getInitials(name) {
     if (!name) return "?";
-    return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+    return name.split(" ").slice(0, 2).map(function(w) { return w[0]; }).join("").toUpperCase();
   },
 
   getPlaceholderColor(segment) {
@@ -204,23 +250,13 @@ Module.register("MMM-TicketEvents", {
 
   scheduleUpdate() {
     const self = this;
-    setTimeout(() => {
+    setTimeout(function() {
       self.sendSocketNotification("FETCH_EVENTS", self.config);
     }, this.config.initialLoadDelay);
 
-    setInterval(() => {
+    setInterval(function() {
       self.sendSocketNotification("FETCH_EVENTS", self.config);
     }, this.config.updateInterval);
-  },
-
-  startRotation() {
-    if (this.rotateTimer) clearInterval(this.rotateTimer);
-    if (this.events.length <= 1) return;
-    const self = this;
-    this.rotateTimer = setInterval(() => {
-      self.activeIndex = (self.activeIndex + 1) % self.events.length;
-      self.updateDom(self.config.animationSpeed);
-    }, this.config.rotateInterval);
   },
 
   socketNotificationReceived(notification, payload) {
@@ -230,8 +266,6 @@ Module.register("MMM-TicketEvents", {
         this.loaded = true;
         this.hasError = false;
         this.activeIndex = 0;
-        if (this.rotateTimer) clearInterval(this.rotateTimer);
-        this.startRotation();
       } else if (!payload.success) {
         this.hasError = true;
         this.errorMessage = payload.error || "Failed to load events";
