@@ -2,7 +2,7 @@
 
 A MagicMirror² module that displays upcoming events powered by the [Ticketmaster Discovery API](https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/). Events scroll in a continuous smooth ticker with images, dates, venues, and pricing.
 
-![Screenshot](screenshots/screenshot.png)
+![Screenshot](screenshots/screenshot.PNG)
 
 ## Features
 
