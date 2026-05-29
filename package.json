@@ -1,0 +1,21 @@
+{
+  "name": "mmm-ticketevents",
+  "version": "1.0.0",
+  "description": "MagicMirror² module to display upcoming events using the Ticketmaster Discovery API",
+  "main": "MMM-TicketEvents.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "magicmirror",
+    "magicmirror2",
+    "ticketmaster",
+    "events",
+    "module"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.0"
+  }
+}
